@@ -1,21 +1,20 @@
 const chai = require('chai');
 const chaiHttp = require('chai-http');
 const app = require('../app');
-const users = require('../models/userModel');
 const jwt = require('jsonwebtoken');
 const secretKey = process.env.SECRET_KEY || 'default_secret_key';
+const fs = require('fs');
+const path = require('path');
+const usersFilePath = path.join(__dirname, '../data/users.json');
 
 chai.use(chaiHttp);
 chai.should();
 
 describe('User API', () => {
   beforeEach(() => {
-    users.length = 0;
+    fs.writeFileSync(usersFilePath, '[]', 'utf8');
   });
 
-  /**
-   * Test the POST /register route
-   */
   describe('POST /api/register', () => {
     it('should register a new user', (done) => {
       const user = {
@@ -59,12 +58,12 @@ describe('User API', () => {
         password: 'password123',
       };
 
-      users.push({
+      fs.writeFileSync(usersFilePath, JSON.stringify([{
         id: 1,
         username: 'testuser',
         email: 'test@example.com',
         password: 'hashedpassword',
-      });
+      }]), 'utf8');
 
       chai.request(app)
         .post('/api/register')
@@ -77,9 +76,6 @@ describe('User API', () => {
     });
   });
 
-  /**
-   * Test the POST /login route
-   */
   describe('POST /api/login', () => {
     it('should login a user and return a token', (done) => {
       const user = {
@@ -114,9 +110,6 @@ describe('User API', () => {
     });
   });
 
-  /**
-   * Test the GET /profile route
-   */
   describe('GET /api/profile', () => {
     it('should get the user profile when authenticated', (done) => {
       const user = {
@@ -168,9 +161,6 @@ describe('User API', () => {
     });
   });
 
-  /**
-   * Test the PUT /change-password route
-   */
   describe('PUT /api/change-password', () => {
     let token;
 

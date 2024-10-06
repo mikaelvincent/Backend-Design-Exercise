@@ -1,4 +1,4 @@
-const users = require('../models/userModel');
+const userModel = require('../models/userModel');
 const jwt = require('jsonwebtoken');
 const Joi = require('joi');
 const bcrypt = require('bcrypt');
@@ -26,12 +26,13 @@ exports.register = (req, res) => {
   if (error) return res.status(400).json({ message: error.details[0].message });
 
   const { username, email, password } = req.body;
-  const userExists = users.find(user => user.username === username);
+  const userExists = userModel.findUserByUsername(username);
   if (userExists) return res.status(409).json({ message: 'Username already exists.' });
 
   const hashedPassword = bcrypt.hashSync(password, 10);
+  const users = userModel.getAllUsers();
   const newUser = { id: users.length + 1, username, email, password: hashedPassword };
-  users.push(newUser);
+  userModel.addUser(newUser);
   res.status(201).json({ message: 'User registered successfully.', user: newUser });
 };
 
@@ -40,7 +41,7 @@ exports.login = (req, res) => {
   if (error) return res.status(400).json({ message: error.details[0].message });
 
   const { username, password } = req.body;
-  const user = users.find(u => u.username === username);
+  const user = userModel.findUserByUsername(username);
   if (!user || !bcrypt.compareSync(password, user.password))
     return res.status(401).json({ message: 'Invalid credentials.' });
 
@@ -50,7 +51,7 @@ exports.login = (req, res) => {
 
 exports.getProfile = (req, res) => {
   const userId = req.userId;
-  const user = users.find(u => u.id === userId);
+  const user = userModel.findUserById(userId);
   if (!user) return res.status(404).json({ message: 'User not found.' });
 
   res.status(200).json({ user });
@@ -61,10 +62,15 @@ exports.changePassword = (req, res) => {
   if (error) return res.status(400).json({ message: error.details[0].message });
 
   const userId = req.userId;
-  const user = users.find(u => u.id === userId);
+  const user = userModel.findUserById(userId);
   if (!user || !bcrypt.compareSync(req.body.oldPassword, user.password))
     return res.status(400).json({ message: 'Invalid old password.' });
 
   user.password = bcrypt.hashSync(req.body.newPassword, 10);
-  res.status(200).json({ message: 'Password changed successfully.' });
+  const updated = userModel.updateUser(user);
+  if (updated) {
+    res.status(200).json({ message: 'Password changed successfully.' });
+  } else {
+    res.status(500).json({ message: 'Failed to update password.' });
+  }
 };
