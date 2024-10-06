@@ -9,9 +9,8 @@ chai.use(chaiHttp);
 chai.should();
 
 describe('User API', () => {
-  // Before each test, clear the users array
   beforeEach(() => {
-    users.length = 0; // Reset the user array
+    users.length = 0;
   });
 
   /**
@@ -30,7 +29,6 @@ describe('User API', () => {
         .send(user)
         .end((err, res) => {
           res.should.have.status(201);
-          res.body.should.be.a('object');
           res.body.should.have.property('message').eql('User registered successfully.');
           res.body.user.should.have.property('id');
           res.body.user.should.have.property('username').eql('testuser');
@@ -84,7 +82,6 @@ describe('User API', () => {
    */
   describe('POST /api/login', () => {
     it('should login a user and return a token', (done) => {
-      // First, register a user
       const user = {
         username: 'testuser',
         email: 'test@example.com',
@@ -93,8 +90,7 @@ describe('User API', () => {
       chai.request(app)
         .post('/api/register')
         .send(user)
-        .end((err, res) => {
-          // Then, attempt to login
+        .end(() => {
           chai.request(app)
             .post('/api/login')
             .send({ username: 'testuser', password: 'password123' })
@@ -123,7 +119,6 @@ describe('User API', () => {
    */
   describe('GET /api/profile', () => {
     it('should get the user profile when authenticated', (done) => {
-      // First, register and login a user to get a token
       const user = {
         username: 'testuser',
         email: 'test@example.com',
@@ -132,13 +127,12 @@ describe('User API', () => {
       chai.request(app)
         .post('/api/register')
         .send(user)
-        .end((err, res) => {
+        .end(() => {
           chai.request(app)
             .post('/api/login')
             .send({ username: 'testuser', password: 'password123' })
             .end((err, res) => {
               const token = res.body.token;
-              // Access the protected route
               chai.request(app)
                 .get('/api/profile')
                 .set('Authorization', `Bearer ${token}`)
@@ -174,11 +168,69 @@ describe('User API', () => {
     });
   });
 
+  /**
+   * Test the PUT /change-password route
+   */
+  describe('PUT /api/change-password', () => {
+    let token;
+
+    beforeEach((done) => {
+      const user = {
+        username: 'testuser',
+        email: 'test@example.com',
+        password: 'password123',
+      };
+      chai.request(app)
+        .post('/api/register')
+        .send(user)
+        .end(() => {
+          chai.request(app)
+            .post('/api/login')
+            .send({ username: 'testuser', password: 'password123' })
+            .end((err, res) => {
+              token = res.body.token;
+              done();
+            });
+        });
+    });
+
+    it('should change the user password when valid', (done) => {
+      const passwordData = {
+        oldPassword: 'password123',
+        newPassword: 'newpass123',
+      };
+      chai.request(app)
+        .put('/api/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send(passwordData)
+        .end((err, res) => {
+          res.should.have.status(200);
+          res.body.should.have.property('message').eql('Password changed successfully.');
+          done();
+        });
+    });
+
+    it('should not change the password with invalid old password', (done) => {
+      const passwordData = {
+        oldPassword: 'wrongpass',
+        newPassword: 'newpass123',
+      };
+      chai.request(app)
+        .put('/api/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send(passwordData)
+        .end((err, res) => {
+          res.should.have.status(400);
+          res.body.should.have.property('message').eql('Invalid old password.');
+          done();
+        });
+    });
+  });
+
   describe('Rate Limiting', () => {
     let validToken;
-  
+
     before(() => {
-      // Generate a valid token
       const testUser = {
         id: 1,
         username: 'testuser',
@@ -186,21 +238,20 @@ describe('User API', () => {
       };
       validToken = jwt.sign({ id: testUser.id }, secretKey, { expiresIn: '1h' });
     });
-  
+
     after(() => {
-      // Clean up
       delete process.env.RATE_LIMIT_MAX;
     });
-  
+
     it('should return 429 when rate limit is exceeded', (done) => {
       let completedRequests = 0;
-      const totalRequests = 6; // Exceed the max limit of 5
-  
+      const totalRequests = 6;
+
       for (let i = 0; i < totalRequests; i++) {
         chai.request(app)
           .get('/api/profile')
           .set('Authorization', `Bearer ${validToken}`)
-          .set('x-enable-rate-limit', 'true') // Enable rate limiting
+          .set('x-enable-rate-limit', 'true')
           .end((err, res) => {
             completedRequests++;
             if (completedRequests === totalRequests) {
