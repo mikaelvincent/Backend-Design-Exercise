@@ -35,6 +35,7 @@ project/
 ├── test/
 │   ├── rateLimit.test.js
 │   └── user.test.js
+├── .env
 ├── .env.example
 ├── .gitignore
 ├── package.json
