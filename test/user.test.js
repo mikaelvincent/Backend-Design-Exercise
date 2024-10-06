@@ -1,3 +1,4 @@
+require('dotenv').config();
 const chai = require('chai');
 const chaiHttp = require('chai-http');
 const app = require('../app');
@@ -170,6 +171,29 @@ describe('User API', () => {
           res.body.should.have.property('message').eql('Failed to authenticate token.');
           done();
         });
+    });
+  });
+
+  // Additional test to check rate limiting
+  describe('Rate Limiting', () => {
+    it('should return 429 when rate limit is exceeded', (done) => {
+      // Make more requests than the rate limit allows
+      let completedRequests = 0;
+      const totalRequests = 101; // Exceed the max limit of 100
+  
+      for (let i = 0; i < totalRequests; i++) {
+        chai.request(app)
+          .get('/api/profile') // or any other route
+          .set('Authorization', 'Bearer invalidtoken')
+          .end((err, res) => {
+            completedRequests++;
+            if (completedRequests === totalRequests) {
+              res.should.have.status(429);
+              res.body.should.have.property('message').eql('Too many requests from this IP, please try again after 15 minutes.');
+              done();
+            }
+          });
+      }
     });
   });
 });
