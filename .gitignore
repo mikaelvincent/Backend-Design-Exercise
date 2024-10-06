@@ -1,5 +1,2 @@
 node_modules/
 .env
-.projectignore
-generate_project_structure.py
-project_structure.txt

@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 
-// Use the secret key from environment variables with a default fallback
-const secretKey = process.env.SECRET_KEY || 'default_secret_key';
+// Use the secret key from environment variables
+const secretKey = process.env.SECRET_KEY;
 
 module.exports = (req, res, next) => {
   const authHeader = req.headers['authorization'];
