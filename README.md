@@ -38,6 +38,7 @@ project/
 ├── .env
 ├── .env.example
 ├── .gitignore
+├── package-lock.json
 ├── package.json
 └── README.md
 ```
