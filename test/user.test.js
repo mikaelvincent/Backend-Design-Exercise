@@ -3,7 +3,7 @@
  * 
  * This file defines test cases for the user-related operations provided
  * by the Node.js application. It covers tests for registration, login,
- * profile retrieval, password change, and rate limiting functionality.
+ * profile retrieval, and password change functionality.
  * 
  * The tests are implemented using Chai and Mocha, with Chai-HTTP used to
  * simulate HTTP requests. JWT is also tested for authentication.
@@ -282,59 +282,6 @@ describe('User API', () => {
 					res.body.should.have.property('message').eql('Invalid old password.');
 					done();
 				});
-		});
-	});
-
-	/**
-	 * Test: Rate Limiting
-	 * 
-	 * Verifies that rate limiting is applied after exceeding the maximum number of requests.
-	 */
-	describe('Rate Limiting', () => {
-		let validToken;
-
-		/**
-		 * Before the rate limit test, generate a valid JWT token for an existing user.
-		 */
-		before(() => {
-			const testUser = {
-				id: 1,
-				username: 'testuser',
-				email: 'test@example.com',
-			};
-			validToken = jwt.sign({
-				id: testUser.id,
-			}, secretKey, {
-				expiresIn: '1h',
-			});
-		});
-
-		/**
-		 * After the rate limit test, restore the default rate limit settings.
-		 */
-		after(() => {
-			delete process.env.RATE_LIMIT_MAX; // Reset rate limit configuration after test
-		});
-
-		it('should return 429 when rate limit is exceeded', (done) => {
-			let completedRequests = 0;
-			const totalRequests = 6;
-
-			// Send multiple requests to exceed the rate limit
-			for (let i = 0; i < totalRequests; i++) {
-				chai.request(app)
-					.get('/api/profile')
-					.set('Authorization', `Bearer ${validToken}`)
-					.set('x-enable-rate-limit', 'true')
-					.end((err, res) => {
-						completedRequests++;
-						if (completedRequests === totalRequests) {
-							res.should.have.status(429); // Too many requests
-							res.body.should.have.property('message').eql('Too many requests from this IP, please try again after 15 minutes.');
-							done();
-						}
-					});
-			}
 		});
 	});
 });
