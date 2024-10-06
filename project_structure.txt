@@ -1,0 +1,600 @@
+Project Repository Structure:
+
+-> .git
+	-> [omitted for brevity]
+-> controllers
+	-> userController.js
+-> data
+	-> users.json
+-> middleware
+	-> authMiddleware.js
+	-> loggerMiddleware.js
+	-> rateLimitMiddleware.js
+-> models
+	-> userModel.js
+-> node_modules
+	-> [omitted for brevity]
+-> routes
+	-> user.js
+-> test
+	-> user.test.js
+-> .gitignore
+-> app.js
+-> package-lock.json
+-> package.json
+
+---
+
+controllers\userController.js:
+
+```
+const users = require('../models/userModel');
+const jwt = require('jsonwebtoken');
+const Joi = require('joi');
+const bcrypt = require('bcrypt');
+
+// Use the secret key from environment variables with a default fallback
+const secretKey = process.env.SECRET_KEY || 'default_secret_key';
+
+// Validation schemas
+const registerSchema = Joi.object({
+  username: Joi.string().min(3).required(),
+  email: Joi.string().email().required(),
+  password: Joi.string().min(6).required(),
+});
+
+const loginSchema = Joi.object({
+  username: Joi.string().required(),
+  password: Joi.string().required(),
+});
+
+// Register a new user
+exports.register = (req, res) => {
+  const { error } = registerSchema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
+  }
+
+  const { username, email, password } = req.body;
+
+  // Check if user already exists
+  const userExists = users.find(user => user.username === username);
+  if (userExists) {
+    return res.status(409).json({ message: 'Username already exists.' });
+  }
+
+  // Hash the password
+  const hashedPassword = bcrypt.hashSync(password, 10);
+
+  // Create new user
+  const newUser = {
+    id: users.length + 1,
+    username,
+    email,
+    password: hashedPassword, // Store hashed password
+  };
+
+  users.push(newUser);
+  res.status(201).json({ message: 'User registered successfully.', user: newUser });
+};
+
+// User login
+exports.login = (req, res) => {
+  const { error } = loginSchema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
+  }
+
+  const { username, password } = req.body;
+
+  // Find user
+  const user = users.find(u => u.username === username);
+  if (!user) {
+    return res.status(401).json({ message: 'Invalid credentials.' });
+  }
+
+  // Compare passwords
+  const validPassword = bcrypt.compareSync(password, user.password);
+  if (!validPassword) {
+    return res.status(401).json({ message: 'Invalid credentials.' });
+  }
+
+  // Generate token
+  const token = jwt.sign({ id: user.id }, secretKey, { expiresIn: '1h' });
+
+  res.status(200).json({ message: 'Login successful.', token });
+};
+
+// Get user profile
+exports.getProfile = (req, res) => {
+  const userId = req.userId; // Set by authMiddleware
+
+  const user = users.find(u => u.id === userId);
+  if (!user) {
+    return res.status(404).json({ message: 'User not found.' });
+  }
+
+  res.status(200).json({ user });
+};
+```
+
+---
+
+data\users.json:
+
+[not yet implemented]
+
+---
+
+middleware\authMiddleware.js:
+
+```
+const jwt = require('jsonwebtoken');
+
+// Use the secret key from environment variables with a default fallback
+const secretKey = process.env.SECRET_KEY || 'default_secret_key';
+
+module.exports = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+
+  // Check for token in Authorization header
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(403).json({ message: 'No token provided.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  jwt.verify(token, secretKey, (err, decoded) => {
+    if (err) {
+      return res.status(401).json({ message: 'Failed to authenticate token.' });
+    }
+
+    // Save user ID for use in other routes
+    req.userId = decoded.id;
+    next();
+  });
+};
+```
+
+---
+
+middleware\loggerMiddleware.js:
+
+```
+module.exports = (req, res, next) => {
+    const method = req.method;
+    const route = req.originalUrl;
+    const timestamp = new Date().toISOString();
+  
+    console.log(`[${timestamp}] ${method} ${route}`);
+    next();
+  };
+  
+```
+
+---
+
+middleware\rateLimitMiddleware.js:
+
+```
+const rateLimit = require('express-rate-limit');
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: (req, res) => {
+    const maxRequests = process.env.RATE_LIMIT_MAX ? parseInt(process.env.RATE_LIMIT_MAX, 10) : 100;
+    return maxRequests;
+  },
+  skip: (req, res) => {
+    // Skip rate limiting during tests unless 'x-enable-rate-limit' header is set
+    if (process.env.NODE_ENV === 'test' && !req.headers['x-enable-rate-limit']) {
+      return true; // Skip rate limiting
+    }
+    return false;
+  },
+  message: {
+    message: 'Too many requests from this IP, please try again after 15 minutes.',
+  },
+  headers: true,
+});
+
+module.exports = limiter;
+```
+
+---
+
+models\userModel.js:
+
+```
+let users = [];
+
+module.exports = users;
+```
+
+---
+
+routes\user.js:
+
+```
+const express = require('express');
+const router = express.Router();
+const userController = require('../controllers/userController');
+const authMiddleware = require('../middleware/authMiddleware');
+
+// Public routes
+router.post('/register', userController.register);
+router.post('/login', userController.login);
+
+// Protected routes
+router.get('/profile', authMiddleware, userController.getProfile);
+
+module.exports = router;
+```
+
+---
+
+test\user.test.js:
+
+```
+const chai = require('chai');
+const chaiHttp = require('chai-http');
+const app = require('../app');
+const users = require('../models/userModel');
+const jwt = require('jsonwebtoken');
+const secretKey = process.env.SECRET_KEY || 'default_secret_key';
+
+chai.use(chaiHttp);
+chai.should();
+
+describe('User API', () => {
+  // Before each test, clear the users array
+  beforeEach(() => {
+    users.length = 0; // Reset the user array
+  });
+
+  /**
+   * Test the POST /register route
+   */
+  describe('POST /api/register', () => {
+    it('should register a new user', (done) => {
+      const user = {
+        username: 'testuser',
+        email: 'test@example.com',
+        password: 'password123',
+      };
+
+      chai.request(app)
+        .post('/api/register')
+        .send(user)
+        .end((err, res) => {
+          res.should.have.status(201);
+          res.body.should.be.a('object');
+          res.body.should.have.property('message').eql('User registered successfully.');
+          res.body.user.should.have.property('id');
+          res.body.user.should.have.property('username').eql('testuser');
+          done();
+        });
+    });
+
+    it('should not register a user with missing fields', (done) => {
+      const user = {
+        username: 'testuser',
+        email: 'test@example.com',
+      };
+
+      chai.request(app)
+        .post('/api/register')
+        .send(user)
+        .end((err, res) => {
+          res.should.have.status(400);
+          res.body.should.have.property('message');
+          done();
+        });
+    });
+
+    it('should not register a user with an existing username', (done) => {
+      const user = {
+        username: 'testuser',
+        email: 'test@example.com',
+        password: 'password123',
+      };
+
+      users.push({
+        id: 1,
+        username: 'testuser',
+        email: 'test@example.com',
+        password: 'hashedpassword',
+      });
+
+      chai.request(app)
+        .post('/api/register')
+        .send(user)
+        .end((err, res) => {
+          res.should.have.status(409);
+          res.body.should.have.property('message').eql('Username already exists.');
+          done();
+        });
+    });
+  });
+
+  /**
+   * Test the POST /login route
+   */
+  describe('POST /api/login', () => {
+    it('should login a user and return a token', (done) => {
+      // First, register a user
+      const user = {
+        username: 'testuser',
+        email: 'test@example.com',
+        password: 'password123',
+      };
+      chai.request(app)
+        .post('/api/register')
+        .send(user)
+        .end((err, res) => {
+          // Then, attempt to login
+          chai.request(app)
+            .post('/api/login')
+            .send({ username: 'testuser', password: 'password123' })
+            .end((err, res) => {
+              res.should.have.status(200);
+              res.body.should.have.property('token');
+              done();
+            });
+        });
+    });
+
+    it('should not login with incorrect credentials', (done) => {
+      chai.request(app)
+        .post('/api/login')
+        .send({ username: 'wronguser', password: 'wrongpassword' })
+        .end((err, res) => {
+          res.should.have.status(401);
+          res.body.should.have.property('message').eql('Invalid credentials.');
+          done();
+        });
+    });
+  });
+
+  /**
+   * Test the GET /profile route
+   */
+  describe('GET /api/profile', () => {
+    it('should get the user profile when authenticated', (done) => {
+      // First, register and login a user to get a token
+      const user = {
+        username: 'testuser',
+        email: 'test@example.com',
+        password: 'password123',
+      };
+      chai.request(app)
+        .post('/api/register')
+        .send(user)
+        .end((err, res) => {
+          chai.request(app)
+            .post('/api/login')
+            .send({ username: 'testuser', password: 'password123' })
+            .end((err, res) => {
+              const token = res.body.token;
+              // Access the protected route
+              chai.request(app)
+                .get('/api/profile')
+                .set('Authorization', `Bearer ${token}`)
+                .end((err, res) => {
+                  res.should.have.status(200);
+                  res.body.should.have.property('user');
+                  res.body.user.should.have.property('username').eql('testuser');
+                  done();
+                });
+            });
+        });
+    });
+
+    it('should not get the user profile without a token', (done) => {
+      chai.request(app)
+        .get('/api/profile')
+        .end((err, res) => {
+          res.should.have.status(403);
+          res.body.should.have.property('message').eql('No token provided.');
+          done();
+        });
+    });
+
+    it('should not get the user profile with an invalid token', (done) => {
+      chai.request(app)
+        .get('/api/profile')
+        .set('Authorization', 'Bearer invalidtoken')
+        .end((err, res) => {
+          res.should.have.status(401);
+          res.body.should.have.property('message').eql('Failed to authenticate token.');
+          done();
+        });
+    });
+  });
+
+  // Additional test to check rate limiting
+  describe('Rate Limiting', () => {
+    let validToken;
+
+    before(() => {
+      // Generate a valid token
+      const testUser = {
+        id: 1,
+        username: 'testuser',
+        email: 'test@example.com',
+      };
+      validToken = jwt.sign({ id: testUser.id }, secretKey, { expiresIn: '1h' });
+    });
+
+    after(() => {
+      // Clean up
+      delete process.env.RATE_LIMIT_MAX;
+    });
+
+    it('should return 429 when rate limit is exceeded', (done) => {
+      let completedRequests = 0;
+      const totalRequests = 6; // Exceed the max limit of 5
+
+      for (let i = 0; i < totalRequests; i++) {
+        chai.request(app)
+          .get('/api/profile')
+          .set('Authorization', `Bearer ${validToken}`)
+          .end((err, res) => {
+            completedRequests++;
+            if (completedRequests === totalRequests) {
+              res.should.have.status(429);
+              res.body.should.have.property('message').eql('Too many requests from this IP, please try again after 15 minutes.');
+              done();
+            }
+          });
+      }
+    });
+  });
+});
+```
+
+---
+
+.gitignore:
+
+```
+node_modules/
+.env
+```
+
+---
+
+app.js:
+
+```
+const express = require('express');
+const bodyParser = require('body-parser');
+const userRoutes = require('./routes/user');
+const loggerMiddleware = require('./middleware/loggerMiddleware');
+const rateLimitMiddleware = require('./middleware/rateLimitMiddleware'); // Import rate limiter
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(bodyParser.json());
+app.use(loggerMiddleware);
+app.use(rateLimitMiddleware);
+
+// Routes
+app.use('/api', userRoutes);
+
+// Start the server
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
+```
+
+---
+
+package-lock.json:
+
+[omitted for brevity]
+
+---
+
+package.json:
+
+```
+{
+  "name": "backend-design-exercise",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "cross-env NODE_ENV=test mocha"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "body-parser": "^1.20.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.1",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "chai": "^4.3.7",
+    "chai-http": "^4.3.0",
+    "cross-env": "^7.0.3",
+    "mocha": "^10.7.3",
+    "supertest": "^7.0.0"
+  }
+}
+```
+
+---
+
+PS D:\GitHub Repositories\Backend-Design-Exercise> npm test
+
+> backend-design-exercise@1.0.0 test
+> cross-env NODE_ENV=test mocha     
+
+
+
+  User API
+    POST /api/register
+[2024-10-06T14:23:27.407Z] POST /api/register
+      ✔ should register a new user (134ms)
+[2024-10-06T14:23:27.516Z] POST /api/register
+      ✔ should not register a user with missing fields
+[2024-10-06T14:23:27.525Z] POST /api/register
+      ✔ should not register a user with an existing username
+    POST /api/login
+[2024-10-06T14:23:27.533Z] POST /api/register
+[2024-10-06T14:23:27.615Z] POST /api/login
+      ✔ should login a user and return a token (176ms)
+[2024-10-06T14:23:27.713Z] POST /api/login
+      ✔ should not login with incorrect credentials
+    GET /api/profile
+[2024-10-06T14:23:27.725Z] POST /api/register
+[2024-10-06T14:23:27.824Z] POST /api/login
+[2024-10-06T14:23:27.916Z] GET /api/profile
+      ✔ should get the user profile when authenticated (201ms)
+[2024-10-06T14:23:27.926Z] GET /api/profile
+      ✔ should not get the user profile without a token
+[2024-10-06T14:23:27.933Z] GET /api/profile
+      ✔ should not get the user profile with an invalid token
+    Rate Limiting
+[2024-10-06T14:23:27.955Z] GET /api/profile
+[2024-10-06T14:23:27.959Z] GET /api/profile
+[2024-10-06T14:23:27.963Z] GET /api/profile
+[2024-10-06T14:23:27.965Z] GET /api/profile
+[2024-10-06T14:23:27.968Z] GET /api/profile
+[2024-10-06T14:23:27.970Z] GET /api/profile
+      1) should return 429 when rate limit is exceeded
+
+
+  8 passing (613ms)
+  1 failing
+
+  1) User API
+       Rate Limiting
+         should return 429 when rate limit is exceeded:
+
+      Uncaught AssertionError: expected Response{ _events: {}, …(35), …(2) } to have status code 429 but got 404
+      + expected - actual
+
+      -404
+      +429
+
+      at D:\GitHub Repositories\Backend-Design-Exercise\test\user.test.js:207:31
+      at Request.callback (node_modules\chai-http\node_modules\superagent\lib\node\index.js:857:12)
+      at D:\GitHub Repositories\Backend-Design-Exercise\node_modules\chai-http\node_modules\superagent\lib\node\index.js:1070:18
+      at IncomingMessage.<anonymous> (node_modules\chai-http\node_modules\superagent\lib\node\parsers\json.js:21:7)
+      at IncomingMessage.emit (node:events:531:35)
+      at endReadableNT (node:internal/streams/readable:1696:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:82:21)

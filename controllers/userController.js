@@ -3,8 +3,8 @@ const jwt = require('jsonwebtoken');
 const Joi = require('joi');
 const bcrypt = require('bcrypt');
 
-// Use the secret key from environment variables
-const secretKey = process.env.SECRET_KEY;
+// Use the secret key from environment variables with a default fallback
+const secretKey = process.env.SECRET_KEY || 'default_secret_key';
 
 // Validation schemas
 const registerSchema = Joi.object({
