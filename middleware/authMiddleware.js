@@ -1,16 +1,21 @@
 const jwt = require('jsonwebtoken');
-const secretKey = 'temp_secret_key';
+
+// Use the secret key from environment variables
+const secretKey = process.env.SECRET_KEY;
 
 module.exports = (req, res, next) => {
-  const token = req.headers['authorization'];
+  const authHeader = req.headers['authorization'];
 
-  if (!token) {
+  // Check for token in Authorization header
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(403).json({ message: 'No token provided.' });
   }
 
-  jwt.verify(token.split(' ')[1], secretKey, (err, decoded) => {
+  const token = authHeader.split(' ')[1];
+
+  jwt.verify(token, secretKey, (err, decoded) => {
     if (err) {
-      return res.status(500).json({ message: 'Failed to authenticate token.' });
+      return res.status(401).json({ message: 'Failed to authenticate token.' });
     }
 
     // Save user ID for use in other routes

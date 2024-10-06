@@ -1,16 +1,31 @@
 const users = require('../models/userModel');
 const jwt = require('jsonwebtoken');
+const Joi = require('joi');
+const bcrypt = require('bcrypt');
 
-const secretKey = 'temp_secret_key';
+// Use the secret key from environment variables
+const secretKey = process.env.SECRET_KEY;
+
+// Validation schemas
+const registerSchema = Joi.object({
+  username: Joi.string().min(3).required(),
+  email: Joi.string().email().required(),
+  password: Joi.string().min(6).required(),
+});
+
+const loginSchema = Joi.object({
+  username: Joi.string().required(),
+  password: Joi.string().required(),
+});
 
 // Register a new user
 exports.register = (req, res) => {
-  const { username, email, password } = req.body;
-
-  // Basic validation
-  if (!username || !email || !password) {
-    return res.status(400).json({ message: 'Please provide all required fields.' });
+  const { error } = registerSchema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
   }
+
+  const { username, email, password } = req.body;
 
   // Check if user already exists
   const userExists = users.find(user => user.username === username);
@@ -18,12 +33,15 @@ exports.register = (req, res) => {
     return res.status(409).json({ message: 'Username already exists.' });
   }
 
+  // Hash the password
+  const hashedPassword = bcrypt.hashSync(password, 10);
+
   // Create new user
   const newUser = {
     id: users.length + 1,
     username,
     email,
-    password,
+    password: hashedPassword, // Store hashed password
   };
 
   users.push(newUser);
@@ -32,16 +50,22 @@ exports.register = (req, res) => {
 
 // User login
 exports.login = (req, res) => {
-  const { username, password } = req.body;
-
-  // Basic validation
-  if (!username || !password) {
-    return res.status(400).json({ message: 'Please provide username and password.' });
+  const { error } = loginSchema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
   }
 
+  const { username, password } = req.body;
+
   // Find user
-  const user = users.find(u => u.username === username && u.password === password);
+  const user = users.find(u => u.username === username);
   if (!user) {
+    return res.status(401).json({ message: 'Invalid credentials.' });
+  }
+
+  // Compare passwords
+  const validPassword = bcrypt.compareSync(password, user.password);
+  if (!validPassword) {
     return res.status(401).json({ message: 'Invalid credentials.' });
   }
 
