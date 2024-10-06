@@ -1,10 +1,10 @@
-require('dotenv').config();
 const chai = require('chai');
 const chaiHttp = require('chai-http');
 const app = require('../app');
 const users = require('../models/userModel');
+const jwt = require('jsonwebtoken');
+const secretKey = process.env.SECRET_KEY || 'default_secret_key';
 
-// Configure chai
 chai.use(chaiHttp);
 chai.should();
 
@@ -174,17 +174,33 @@ describe('User API', () => {
     });
   });
 
-  // Additional test to check rate limiting
   describe('Rate Limiting', () => {
+    let validToken;
+  
+    before(() => {
+      // Generate a valid token
+      const testUser = {
+        id: 1,
+        username: 'testuser',
+        email: 'test@example.com',
+      };
+      validToken = jwt.sign({ id: testUser.id }, secretKey, { expiresIn: '1h' });
+    });
+  
+    after(() => {
+      // Clean up
+      delete process.env.RATE_LIMIT_MAX;
+    });
+  
     it('should return 429 when rate limit is exceeded', (done) => {
-      // Make more requests than the rate limit allows
       let completedRequests = 0;
-      const totalRequests = 101; // Exceed the max limit of 100
+      const totalRequests = 6; // Exceed the max limit of 5
   
       for (let i = 0; i < totalRequests; i++) {
         chai.request(app)
-          .get('/api/profile') // or any other route
-          .set('Authorization', 'Bearer invalidtoken')
+          .get('/api/profile')
+          .set('Authorization', `Bearer ${validToken}`)
+          .set('x-enable-rate-limit', 'true') // Enable rate limiting
           .end((err, res) => {
             completedRequests++;
             if (completedRequests === totalRequests) {
