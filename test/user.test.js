@@ -12,26 +12,22 @@
 const chai = require('chai');
 const chaiHttp = require('chai-http');
 const app = require('../app'); // Import the application to test
-const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
-
-// Path to the mock user data JSON file
-const usersFilePath = path.join(__dirname, '../data/users.json');
-
-// JWT secret key used for testing (from environment or default value)
-const secretKey = process.env.SECRET_KEY || 'default_secret_key';
 
 chai.use(chaiHttp);
 chai.should(); // Enables 'should' style assertions in tests
 
+// Path to the mock user data JSON file for testing
+const testUsersFilePath = path.join(__dirname, '../data/test_users.json');
+
 describe('User API', () => {
 	/**
-	 * Before each test, reset the user data file to an empty array.
+	 * Before each test, reset the test user data file to an empty array.
 	 * This ensures that no users from previous tests remain in the mock database.
 	 */
 	beforeEach(() => {
-		fs.writeFileSync(usersFilePath, '[]', 'utf8');
+		fs.writeFileSync(testUsersFilePath, '[]', 'utf8');
 	});
 
 	/**
@@ -83,8 +79,8 @@ describe('User API', () => {
 				password: 'password123',
 			};
 
-			// Simulate a user already existing in the system
-			fs.writeFileSync(usersFilePath, JSON.stringify([{
+			// Simulate a user already existing in the system by writing to the test data file
+			fs.writeFileSync(testUsersFilePath, JSON.stringify([{
 				id: 1,
 				username: 'testuser',
 				email: 'test@example.com',

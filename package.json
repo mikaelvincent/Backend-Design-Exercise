@@ -4,7 +4,8 @@
 	"main": "index.js",
 	"type": "commonjs",
 	"scripts": {
-		"test": "cross-env NODE_ENV=test RATE_LIMIT_MAX=5 mocha"
+		"test": "cross-env NODE_ENV=test RATE_LIMIT_MAX=5 mocha",
+		"start": "node app.js"
 	},
 	"keywords": [],
 	"author": "",

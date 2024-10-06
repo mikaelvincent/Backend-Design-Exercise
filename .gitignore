@@ -5,3 +5,4 @@ node_modules/
 .projectheader
 generate_project_structure.py
 project_structure.txt
+data/test_users.json

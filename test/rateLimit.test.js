@@ -17,31 +17,31 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 
-// Path to the mock user data JSON file
-const usersFilePath = path.join(__dirname, '../data/users.json');
+chai.use(chaiHttp);
+chai.should(); // Enables 'should' style assertions in tests
+
+// Path to the mock user data JSON file for testing
+const testUsersFilePath = path.join(__dirname, '../data/test_users.json');
 
 // JWT secret key used for testing (from environment or default value)
 const secretKey = process.env.SECRET_KEY || 'default_secret_key';
-
-chai.use(chaiHttp);
-chai.should(); // Enables 'should' style assertions in tests
 
 describe('Rate Limiting', () => {
 	let validToken;
 
 	/**
-	 * Before the rate limit test, generate a valid JWT token for an existing user.
-	 * Also, ensure that a test user exists in the mock database.
+	 * Before the rate limit test, ensure that a test user exists in the mock database
+	 * and generate a valid JWT token for that user.
 	 */
 	before((done) => {
 		const testUser = {
 			id: 1,
 			username: 'testuser',
 			email: 'test@example.com',
-			password: 'hashedpassword', // Assuming password is already hashed
+			password: '$2b$10$abcdefghijklmnopqrstuvwxyz123456', // Mock hashed password
 		};
-		// Write the test user to the users.json file
-		fs.writeFileSync(usersFilePath, JSON.stringify([testUser]), 'utf8');
+		// Write the test user to the test_users.json file
+		fs.writeFileSync(testUsersFilePath, JSON.stringify([testUser]), 'utf8');
 
 		// Generate a valid JWT token for the test user
 		validToken = jwt.sign({
@@ -58,8 +58,8 @@ describe('Rate Limiting', () => {
 	 * After the rate limit test, clean up the mock database.
 	 */
 	after(() => {
-		fs.writeFileSync(usersFilePath, '[]', 'utf8');  // Reset the users.json file
-		delete process.env.RATE_LIMIT_MAX;              // Reset rate limit configuration after test
+		fs.writeFileSync(testUsersFilePath, '[]', 'utf8');  // Reset the test_users.json file
+		delete process.env.RATE_LIMIT_MAX;                  // Reset rate limit configuration after test
 	});
 
 	it('should return 429 when rate limit is exceeded', (done) => {
